@@ -4,8 +4,11 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -56,6 +59,53 @@ func run(args []string) error {
 		}
 		return nil
 	}
+	if len(args) > 0 && args[0] == "update" {
+		fsu := flag.NewFlagSet("gpac update", flag.ContinueOnError)
+		version := fsu.String("version", "", "release tag / ref to update to (default: latest)")
+		fsu.Usage = func() {
+			fmt.Fprintln(os.Stderr, "Usage: gpac update [--version <ref>] <name|repo|path>")
+			fsu.PrintDefaults()
+		}
+		if err := fsu.Parse(args[1:]); err != nil {
+			return err
+		}
+		if fsu.NArg() != 1 {
+			fsu.Usage()
+			return fmt.Errorf("expected exactly one argument to update (name, repo or path)")
+		}
+		key := fsu.Arg(0)
+		entries, err := manifest.List()
+		if err != nil {
+			return err
+		}
+		var match *manifest.Entry
+		for i := range entries {
+			if entries[i].Name == key || entries[i].Repo == key || entries[i].Path == key {
+				match = &entries[i]
+				break
+			}
+		}
+		if match == nil {
+			return fmt.Errorf("no installed binary matches %s", key)
+		}
+		repo, err := repoparse.Parse(match.Repo)
+		if err != nil {
+			return err
+		}
+		if *version != "" {
+			repo.Ref = *version
+		}
+		updated, err := installToPath(repo, match.Name, match.Path, match.SHA256)
+		if err != nil {
+			return err
+		}
+		if !updated {
+			fmt.Printf("Already up to date: %s (%s)\n", match.Name, repo)
+			return nil
+		}
+		fmt.Printf("Updated %s to %s\n", match.Name, repo)
+		return nil
+	}
 	fs := flag.NewFlagSet("gpac", flag.ContinueOnError)
 	binDir := fs.String("bin-dir", defaultBinDir(), "directory to install the binary into")
 	binName := fs.String("bin-name", "", "name of the installed binary (default: repo name)")
@@ -96,18 +146,44 @@ func run(args []string) error {
 	if runtime.GOOS == "windows" {
 		outPath += ".exe"
 	}
+	if _, err := installToPath(repo, name, outPath, ""); err != nil {
+		return err
+	}
+	fmt.Printf("Installed %s to %s\n", repo, outPath)
+	return nil
+}
+
+func installToPath(repo repoparse.Repo, name, outPath, currentSHA string) (bool, error) {
+	tmp, err := os.CreateTemp("", "gpac-install-*")
+	if err != nil {
+		return false, err
+	}
+	tmpPath := tmp.Name()
+	tmp.Close()
+	defer os.Remove(tmpPath)
 
 	method := "release"
-	if err := installFromRelease(repo, outPath); err != nil {
+	if err := installFromRelease(repo, tmpPath); err != nil {
 		fmt.Fprintf(os.Stderr, "gpac: no prebuilt release binary available (%v); building from source instead...\n", err)
-		if err := installFromSource(repo, outPath); err != nil {
-			return fmt.Errorf("building from source failed: %w", err)
+		if err := installFromSource(repo, tmpPath); err != nil {
+			return false, fmt.Errorf("building from source failed: %w", err)
 		}
 		method = "source"
 	}
 
-	if err := os.Chmod(outPath, 0o755); err != nil {
-		return err
+	if err := os.Chmod(tmpPath, 0o755); err != nil {
+		return false, err
+	}
+
+	newSHA, err := sha256File(tmpPath)
+	if err != nil {
+		return false, err
+	}
+	if currentSHA != "" && currentSHA == newSHA {
+		return false, nil
+	}
+	if err := copyFile(tmpPath, outPath); err != nil {
+		return false, err
 	}
 
 	if err := manifest.Record(manifest.Entry{
@@ -116,12 +192,25 @@ func run(args []string) error {
 		Ref:    repo.Ref,
 		Method: method,
 		Path:   outPath,
+		SHA256: newSHA,
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "gpac: warning: failed to record install in manifest: %v\n", err)
 	}
+	return true, nil
+}
 
-	fmt.Printf("Installed %s to %s\n", repo, outPath)
-	return nil
+func sha256File(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // listInstalled prints every binary gpac has installed, as recorded in its

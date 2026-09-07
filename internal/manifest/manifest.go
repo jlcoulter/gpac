@@ -18,6 +18,7 @@ type Entry struct {
 	Ref         string    `json:"ref,omitempty"`
 	Method      string    `json:"method"` // "release" or "source"
 	Path        string    `json:"path"`
+	SHA256      string    `json:"sha256,omitempty"`
 	InstalledAt time.Time `json:"installed_at"`
 }
 
