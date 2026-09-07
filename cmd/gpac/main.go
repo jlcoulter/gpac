@@ -31,21 +31,80 @@ func main() {
 }
 
 func run(args []string) error {
-	// Support: `gpac remove <name|repo|path>` subcommand to remove installs.
-	if len(args) > 0 && args[0] == "remove" {
-		fsr := flag.NewFlagSet("gpac remove", flag.ContinueOnError)
-		fsr.Usage = func() {
-			fmt.Fprintln(os.Stderr, "Usage: gpac remove <name|repo|path>")
-			fsr.PrintDefaults()
+	if len(args) == 0 {
+		return usageError("expected a subcommand: install, list, remove, or update")
+	}
+
+	switch args[0] {
+	case "install":
+		fs := flag.NewFlagSet("gpac install", flag.ContinueOnError)
+		binDir := fs.String("bin-dir", defaultBinDir(), "directory to install the binary into")
+		binName := fs.String("bin-name", "", "name of the installed binary (default: repo name)")
+		ref := fs.String("version", "", "release tag / ref to install (default: latest)")
+		fs.Usage = func() {
+			fmt.Fprintln(os.Stderr, "Usage: gpac install [flags] <owner/repo | github.com/owner/repo | repo-url>")
+			fs.PrintDefaults()
 		}
-		if err := fsr.Parse(args[1:]); err != nil {
+		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		if fsr.NArg() != 1 {
-			fsr.Usage()
+		if fs.NArg() != 1 {
+			fs.Usage()
+			return fmt.Errorf("expected exactly one repository argument")
+		}
+		repo, err := repoparse.Parse(fs.Arg(0))
+		if err != nil {
+			return err
+		}
+		if *ref != "" {
+			repo.Ref = *ref
+		}
+		name := *binName
+		if name == "" {
+			name = repo.Name
+		}
+		if err := os.MkdirAll(*binDir, 0o755); err != nil {
+			return fmt.Errorf("creating bin dir %s: %w", *binDir, err)
+		}
+		outPath := filepath.Join(*binDir, name)
+		if runtime.GOOS == "windows" {
+			outPath += ".exe"
+		}
+		if _, err := installToPath(repo, name, outPath, ""); err != nil {
+			return err
+		}
+		fmt.Printf("Installed %s to %s\n", repo, outPath)
+		return nil
+
+	case "list":
+		fs := flag.NewFlagSet("gpac list", flag.ContinueOnError)
+		fs.Usage = func() {
+			fmt.Fprintln(os.Stderr, "Usage: gpac list")
+			fs.PrintDefaults()
+		}
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if fs.NArg() != 0 {
+			fs.Usage()
+			return fmt.Errorf("gpac list does not take positional arguments")
+		}
+		return listInstalled()
+
+	case "remove":
+		fs := flag.NewFlagSet("gpac remove", flag.ContinueOnError)
+		fs.Usage = func() {
+			fmt.Fprintln(os.Stderr, "Usage: gpac remove <name|repo|path>")
+			fs.PrintDefaults()
+		}
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if fs.NArg() != 1 {
+			fs.Usage()
 			return fmt.Errorf("expected exactly one argument to remove (name, repo or path)")
 		}
-		key := fsr.Arg(0)
+		key := fs.Arg(0)
 		removed, err := manifest.Remove(key)
 		if err != nil {
 			return err
@@ -58,22 +117,22 @@ func run(args []string) error {
 			}
 		}
 		return nil
-	}
-	if len(args) > 0 && args[0] == "update" {
-		fsu := flag.NewFlagSet("gpac update", flag.ContinueOnError)
-		version := fsu.String("version", "", "release tag / ref to update to (default: latest)")
-		fsu.Usage = func() {
+
+	case "update":
+		fs := flag.NewFlagSet("gpac update", flag.ContinueOnError)
+		version := fs.String("version", "", "release tag / ref to update to (default: latest)")
+		fs.Usage = func() {
 			fmt.Fprintln(os.Stderr, "Usage: gpac update [--version <ref>] <name|repo|path>")
-			fsu.PrintDefaults()
+			fs.PrintDefaults()
 		}
-		if err := fsu.Parse(args[1:]); err != nil {
+		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		if fsu.NArg() != 1 {
-			fsu.Usage()
+		if fs.NArg() != 1 {
+			fs.Usage()
 			return fmt.Errorf("expected exactly one argument to update (name, repo or path)")
 		}
-		key := fsu.Arg(0)
+		key := fs.Arg(0)
 		entries, err := manifest.List()
 		if err != nil {
 			return err
@@ -105,52 +164,16 @@ func run(args []string) error {
 		}
 		fmt.Printf("Updated %s to %s\n", match.Name, repo)
 		return nil
-	}
-	fs := flag.NewFlagSet("gpac", flag.ContinueOnError)
-	binDir := fs.String("bin-dir", defaultBinDir(), "directory to install the binary into")
-	binName := fs.String("bin-name", "", "name of the installed binary (default: repo name)")
-	ref := fs.String("version", "", "release tag / ref to install (default: latest)")
-	list := fs.Bool("list", false, "list all gpac-managed binaries and exit")
-	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Usage: gpac [flags] <owner/repo | github.com/owner/repo | repo-url>")
-		fs.PrintDefaults()
-	}
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if *list {
-		return listInstalled()
-	}
 
-	if fs.NArg() != 1 {
-		fs.Usage()
-		return fmt.Errorf("expected exactly one repository argument")
+	default:
+		fmt.Fprintln(os.Stderr, "Usage: gpac <install|list|remove|update> ...")
+		return fmt.Errorf("unsupported subcommand: %s", args[0])
 	}
+}
 
-	repo, err := repoparse.Parse(fs.Arg(0))
-	if err != nil {
-		return err
-	}
-	if *ref != "" {
-		repo.Ref = *ref
-	}
-	name := *binName
-	if name == "" {
-		name = repo.Name
-	}
-
-	if err := os.MkdirAll(*binDir, 0o755); err != nil {
-		return fmt.Errorf("creating bin dir %s: %w", *binDir, err)
-	}
-	outPath := filepath.Join(*binDir, name)
-	if runtime.GOOS == "windows" {
-		outPath += ".exe"
-	}
-	if _, err := installToPath(repo, name, outPath, ""); err != nil {
-		return err
-	}
-	fmt.Printf("Installed %s to %s\n", repo, outPath)
-	return nil
+func usageError(msg string) error {
+	fmt.Fprintln(os.Stderr, "Usage: gpac <install|list|remove|update> ...")
+	return fmt.Errorf(msg)
 }
 
 func installToPath(repo repoparse.Repo, name, outPath, currentSHA string) (bool, error) {
