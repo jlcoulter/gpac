@@ -173,7 +173,7 @@ func run(args []string) error {
 
 func usageError(msg string) error {
 	fmt.Fprintln(os.Stderr, "Usage: gpac <install|list|remove|update> ...")
-	return fmt.Errorf(msg)
+	return fmt.Errorf("%s", msg)
 }
 
 func installToPath(repo repoparse.Repo, name, outPath, currentSHA string) (bool, error) {
