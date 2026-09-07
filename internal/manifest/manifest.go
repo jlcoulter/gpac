@@ -4,6 +4,7 @@ package manifest
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -119,4 +120,36 @@ func List() ([]Entry, error) {
 
 	sort.Slice(live, func(i, j int) bool { return live[i].Name < live[j].Name })
 	return live, nil
+}
+
+// Remove deletes any manifest entries matching the provided key. The key
+// is compared against entry Name, Repo, and Path. It returns the removed
+// entries so callers can perform any filesystem cleanup required.
+func Remove(key string) ([]Entry, error) {
+	path, err := Path()
+	if err != nil {
+		return nil, err
+	}
+	mf, err := load(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var kept []Entry
+	var removed []Entry
+	for _, e := range mf.Entries {
+		if e.Name == key || e.Repo == key || e.Path == key {
+			removed = append(removed, e)
+		} else {
+			kept = append(kept, e)
+		}
+	}
+	if len(removed) == 0 {
+		return nil, fmt.Errorf("no manifest entry matches %s", key)
+	}
+	mf.Entries = kept
+	if err := save(path, mf); err != nil {
+		return nil, err
+	}
+	return removed, nil
 }

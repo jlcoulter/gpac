@@ -28,6 +28,34 @@ func main() {
 }
 
 func run(args []string) error {
+	// Support: `gpac remove <name|repo|path>` subcommand to remove installs.
+	if len(args) > 0 && args[0] == "remove" {
+		fsr := flag.NewFlagSet("gpac remove", flag.ContinueOnError)
+		fsr.Usage = func() {
+			fmt.Fprintln(os.Stderr, "Usage: gpac remove <name|repo|path>")
+			fsr.PrintDefaults()
+		}
+		if err := fsr.Parse(args[1:]); err != nil {
+			return err
+		}
+		if fsr.NArg() != 1 {
+			fsr.Usage()
+			return fmt.Errorf("expected exactly one argument to remove (name, repo or path)")
+		}
+		key := fsr.Arg(0)
+		removed, err := manifest.Remove(key)
+		if err != nil {
+			return err
+		}
+		for _, e := range removed {
+			if err := os.Remove(e.Path); err != nil && !os.IsNotExist(err) {
+				fmt.Fprintf(os.Stderr, "gpac: warning: failed to remove %s: %v\n", e.Path, err)
+			} else {
+				fmt.Printf("Removed %s (%s)\n", e.Name, e.Path)
+			}
+		}
+		return nil
+	}
 	fs := flag.NewFlagSet("gpac", flag.ContinueOnError)
 	binDir := fs.String("bin-dir", defaultBinDir(), "directory to install the binary into")
 	binName := fs.String("bin-name", "", "name of the installed binary (default: repo name)")
@@ -43,6 +71,7 @@ func run(args []string) error {
 	if *list {
 		return listInstalled()
 	}
+
 	if fs.NArg() != 1 {
 		fs.Usage()
 		return fmt.Errorf("expected exactly one repository argument")
