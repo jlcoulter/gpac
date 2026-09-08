@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/jlcoulter/gpac/compare/v1.1.0...v1.1.1) (2026-09-08)
+
+
+### Bug Fixes
+
+* Download module dependencies before building ([#3](https://github.com/jlcoulter/gpac/issues/3)) ([f893000](https://github.com/jlcoulter/gpac/commit/f8930004cc07a7c51e65dbcceff7eb4381a4dd75))
+
 ## [1.1.0](https://github.com/jlcoulter/gpac/compare/v1.0.0...v1.1.0) (2026-09-07)
 
 
