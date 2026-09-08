@@ -175,6 +175,16 @@ func BuildFromSource(goBin, goroot, owner, repo, ref, outPath string) error {
 		"GOFLAGS=",
 	)
 
+	// Resolve module dependencies and populate go.sum before building, so
+	// the build works even when the source tarball ships without a complete
+	// go.sum (e.g. for users without a local Go installation).
+	downloadCmd := exec.Command(goBin, "mod", "download")
+	downloadCmd.Dir = repoDir
+	downloadCmd.Env = env
+	if out, err := downloadCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("downloading dependencies: %w\n%s", err, out)
+	}
+
 	candidates := []string{".", "./cmd/" + repo}
 	var lastErr error
 	for _, pkg := range candidates {
