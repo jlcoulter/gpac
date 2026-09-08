@@ -39,7 +39,7 @@ func run(args []string) error {
 	case "install":
 		fs := flag.NewFlagSet("gpac install", flag.ContinueOnError)
 		binDir := fs.String("bin-dir", defaultBinDir(), "directory to install the binary into")
-		binName := fs.String("bin-name", "", "name of the installed binary (default: repo name, or repo#branch for branch installs)")
+		binName := fs.String("bin-name", "", "name of the installed binary (default: repo name)")
 		ref := fs.String("version", "", "release tag / ref to install (default: latest)")
 		branch := fs.String("branch", "", "branch to build from source (default: none)")
 		fs.Usage = func() {
@@ -69,9 +69,6 @@ func run(args []string) error {
 		name := *binName
 		if name == "" {
 			name = repo.Name
-			if repo.Branch != "" {
-				name = repo.Name + "#" + repo.Branch
-			}
 		}
 		if err := os.MkdirAll(*binDir, 0o755); err != nil {
 			return fmt.Errorf("creating bin dir %s: %w", *binDir, err)
@@ -161,9 +158,6 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
-		if match.Branch != "" {
-			repo.Branch = match.Branch
-		}
 		if *version != "" {
 			repo.Ref = *version
 		}
@@ -230,9 +224,8 @@ func installToPath(repo repoparse.Repo, name, outPath, currentSHA string) (bool,
 
 	if err := manifest.Record(manifest.Entry{
 		Name:   name,
-		Repo:   repo.String(),
+		Repo:   repo.Owner + "/" + repo.Name,
 		Ref:    repo.Ref,
-		Branch: repo.Branch,
 		Method: method,
 		Path:   outPath,
 		SHA256: newSHA,
@@ -269,9 +262,6 @@ func listInstalled() error {
 	}
 	for _, e := range entries {
 		ref := e.Ref
-		if e.Branch != "" {
-			ref = "#" + e.Branch
-		}
 		if ref == "" {
 			ref = "latest"
 		}

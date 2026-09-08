@@ -177,12 +177,14 @@ func BuildFromSource(goBin, goroot, owner, repo, ref, outPath string) error {
 
 	// Resolve module dependencies and populate go.sum before building, so
 	// the build works even when the source tarball ships without a complete
-	// go.sum (e.g. for users without a local Go installation).
-	downloadCmd := exec.Command(goBin, "mod", "download")
-	downloadCmd.Dir = repoDir
-	downloadCmd.Env = env
-	if out, err := downloadCmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("downloading dependencies: %w\n%s", err, out)
+	// go.sum (e.g. for users without a local Go installation). go mod tidy
+	// adds any missing go.sum entries (go mod download alone does not), which
+	// is required for the subsequent go build to succeed.
+	tidyCmd := exec.Command(goBin, "mod", "tidy")
+	tidyCmd.Dir = repoDir
+	tidyCmd.Env = env
+	if out, err := tidyCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("tidying module dependencies: %w\n%s", err, out)
 	}
 
 	candidates := []string{".", "./cmd/" + repo}
