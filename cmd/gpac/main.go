@@ -39,8 +39,9 @@ func run(args []string) error {
 	case "install":
 		fs := flag.NewFlagSet("gpac install", flag.ContinueOnError)
 		binDir := fs.String("bin-dir", defaultBinDir(), "directory to install the binary into")
-		binName := fs.String("bin-name", "", "name of the installed binary (default: repo name)")
+		binName := fs.String("bin-name", "", "name of the installed binary (default: repo name, or repo#branch for branch installs)")
 		ref := fs.String("version", "", "release tag / ref to install (default: latest)")
+		branch := fs.String("branch", "", "branch to build from source (default: none)")
 		fs.Usage = func() {
 			fmt.Fprintln(os.Stderr, "Usage: gpac install [flags] <owner/repo | github.com/owner/repo | repo-url>")
 			fs.PrintDefaults()
@@ -59,9 +60,18 @@ func run(args []string) error {
 		if *ref != "" {
 			repo.Ref = *ref
 		}
+		if *branch != "" {
+			repo.Branch = *branch
+		}
+		if repo.Branch != "" && repo.Ref != "" {
+			return fmt.Errorf("cannot specify both a version and a branch")
+		}
 		name := *binName
 		if name == "" {
 			name = repo.Name
+			if repo.Branch != "" {
+				name = repo.Name + "#" + repo.Branch
+			}
 		}
 		if err := os.MkdirAll(*binDir, 0o755); err != nil {
 			return fmt.Errorf("creating bin dir %s: %w", *binDir, err)
@@ -151,6 +161,9 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
+		if match.Branch != "" {
+			repo.Branch = match.Branch
+		}
 		if *version != "" {
 			repo.Ref = *version
 		}
@@ -186,7 +199,13 @@ func installToPath(repo repoparse.Repo, name, outPath, currentSHA string) (bool,
 	defer os.Remove(tmpPath)
 
 	method := "release"
-	if err := installFromRelease(repo, tmpPath); err != nil {
+	if repo.Branch != "" {
+		// Branch installs have no release assets; build straight from source.
+		method = "source"
+		if err := installFromSource(repo, tmpPath); err != nil {
+			return false, fmt.Errorf("building from source failed: %w", err)
+		}
+	} else if err := installFromRelease(repo, tmpPath); err != nil {
 		fmt.Fprintf(os.Stderr, "gpac: no prebuilt release binary available (%v); building from source instead...\n", err)
 		if err := installFromSource(repo, tmpPath); err != nil {
 			return false, fmt.Errorf("building from source failed: %w", err)
@@ -213,6 +232,7 @@ func installToPath(repo repoparse.Repo, name, outPath, currentSHA string) (bool,
 		Name:   name,
 		Repo:   repo.String(),
 		Ref:    repo.Ref,
+		Branch: repo.Branch,
 		Method: method,
 		Path:   outPath,
 		SHA256: newSHA,
@@ -249,6 +269,9 @@ func listInstalled() error {
 	}
 	for _, e := range entries {
 		ref := e.Ref
+		if e.Branch != "" {
+			ref = "#" + e.Branch
+		}
 		if ref == "" {
 			ref = "latest"
 		}
@@ -348,7 +371,11 @@ func installFromSource(repo repoparse.Repo, outPath string) error {
 	if err != nil {
 		return err
 	}
-	return toolchain.BuildFromSource(goBin, goroot, repo.Owner, repo.Name, repo.Ref, outPath)
+	ref := repo.Ref
+	if repo.Branch != "" {
+		ref = repo.Branch
+	}
+	return toolchain.BuildFromSource(goBin, goroot, repo.Owner, repo.Name, ref, outPath)
 }
 
 func copyFile(src, dst string) error {
