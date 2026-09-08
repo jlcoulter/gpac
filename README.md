@@ -50,6 +50,8 @@ Examples:
 gpac junegunn/fzf                       # install latest release
 gpac rakyll/hey                         # no release binaries -> builds from source
 gpac owner/repo --version v1.2.3        # install a specific tag
+gpac owner/repo --branch main           # build from a specific branch
+gpac owner/repo#develop                 # shorthand for --branch develop
 gpac owner/repo --bin-name mytool       # install under a different name
 gpac owner/repo --bin-dir /usr/local/bin
 gpac --list                             # show gpac-managed binaries
@@ -60,9 +62,26 @@ gpac --list                             # show gpac-managed binaries
 | Flag | Description |
 |---|---|
 | `--bin-dir` | Directory to install the binary into (default: `~/bin`) |
-| `--bin-name` | Name of the installed binary (default: repo name) |
+| `--bin-name` | Name of the installed binary (default: repo name, or `repo#branch` for branch installs) |
 | `--version` | Release tag / ref to install (default: latest) |
+| `--branch` | Branch to build from source (default: none) |
 | `--list` | List all gpac-managed binaries and exit |
+
+## Installing from a branch
+
+To install a binary built from a specific branch (rather than a release),
+use `--branch` or the `#branch` shorthand:
+
+```sh
+gpac owner/repo --branch main
+gpac owner/repo#develop
+```
+
+Branch installs always build from source (branches have no release assets)
+and, by default, install under a distinct name — `repo#branch` — so they
+never overwrite the main release binary. Use `--bin-name` to override.
+Running `gpac update` on a branch install rebuilds it from the latest commit
+on that same branch.
 
 ## How it tracks installs
 
@@ -132,6 +151,8 @@ Examples:
 gpac junegunn/fzf                       # install latest release
 gpac rakyll/hey                         # no release binaries -> builds from source
 gpac owner/repo --version v1.2.3        # install a specific tag
+gpac owner/repo --branch main           # build from a specific branch
+gpac owner/repo#develop                 # shorthand for --branch develop
 gpac owner/repo --bin-name mytool       # install under a different name
 gpac owner/repo --bin-dir /usr/local/bin
 gpac --list                             # show gpac-managed binaries
@@ -142,9 +163,26 @@ gpac --list                             # show gpac-managed binaries
 | Flag | Description |
 |---|---|
 | `--bin-dir` | Directory to install the binary into (default: `~/bin`) |
-| `--bin-name` | Name of the installed binary (default: repo name) |
+| `--bin-name` | Name of the installed binary (default: repo name, or `repo#branch` for branch installs) |
 | `--version` | Release tag / ref to install (default: latest) |
+| `--branch` | Branch to build from source (default: none) |
 | `--list` | List all gpac-managed binaries and exit |
+
+## Installing from a branch
+
+To install a binary built from a specific branch (rather than a release),
+use `--branch` or the `#branch` shorthand:
+
+```sh
+gpac owner/repo --branch main
+gpac owner/repo#develop
+```
+
+Branch installs always build from source (branches have no release assets)
+and, by default, install under a distinct name — `repo#branch` — so they
+never overwrite the main release binary. Use `--bin-name` to override.
+Running `gpac update` on a branch install rebuilds it from the latest commit
+on that same branch.
 
 ## How it tracks installs
 

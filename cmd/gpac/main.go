@@ -41,6 +41,7 @@ func run(args []string) error {
 		binDir := fs.String("bin-dir", defaultBinDir(), "directory to install the binary into")
 		binName := fs.String("bin-name", "", "name of the installed binary (default: repo name)")
 		ref := fs.String("version", "", "release tag / ref to install (default: latest)")
+		branch := fs.String("branch", "", "branch to build from source (default: none)")
 		fs.Usage = func() {
 			fmt.Fprintln(os.Stderr, "Usage: gpac install [flags] <owner/repo | github.com/owner/repo | repo-url>")
 			fs.PrintDefaults()
@@ -58,6 +59,12 @@ func run(args []string) error {
 		}
 		if *ref != "" {
 			repo.Ref = *ref
+		}
+		if *branch != "" {
+			repo.Branch = *branch
+		}
+		if repo.Branch != "" && repo.Ref != "" {
+			return fmt.Errorf("cannot specify both a version and a branch")
 		}
 		name := *binName
 		if name == "" {
@@ -186,7 +193,13 @@ func installToPath(repo repoparse.Repo, name, outPath, currentSHA string) (bool,
 	defer os.Remove(tmpPath)
 
 	method := "release"
-	if err := installFromRelease(repo, tmpPath); err != nil {
+	if repo.Branch != "" {
+		// Branch installs have no release assets; build straight from source.
+		method = "source"
+		if err := installFromSource(repo, tmpPath); err != nil {
+			return false, fmt.Errorf("building from source failed: %w", err)
+		}
+	} else if err := installFromRelease(repo, tmpPath); err != nil {
 		fmt.Fprintf(os.Stderr, "gpac: no prebuilt release binary available (%v); building from source instead...\n", err)
 		if err := installFromSource(repo, tmpPath); err != nil {
 			return false, fmt.Errorf("building from source failed: %w", err)
@@ -211,7 +224,7 @@ func installToPath(repo repoparse.Repo, name, outPath, currentSHA string) (bool,
 
 	if err := manifest.Record(manifest.Entry{
 		Name:   name,
-		Repo:   repo.String(),
+		Repo:   repo.Owner + "/" + repo.Name,
 		Ref:    repo.Ref,
 		Method: method,
 		Path:   outPath,
@@ -348,7 +361,11 @@ func installFromSource(repo repoparse.Repo, outPath string) error {
 	if err != nil {
 		return err
 	}
-	return toolchain.BuildFromSource(goBin, goroot, repo.Owner, repo.Name, repo.Ref, outPath)
+	ref := repo.Ref
+	if repo.Branch != "" {
+		ref = repo.Branch
+	}
+	return toolchain.BuildFromSource(goBin, goroot, repo.Owner, repo.Name, ref, outPath)
 }
 
 func copyFile(src, dst string) error {

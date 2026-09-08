@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 )
@@ -71,7 +72,7 @@ func LatestRelease(owner, repo string) (*Release, error) {
 
 // ReleaseByTag fetches a specific release by tag name.
 func ReleaseByTag(owner, repo, tag string) (*Release, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/releases/tags/%s", apiBase, owner, repo, tag)
+	url := fmt.Sprintf("%s/repos/%s/%s/releases/tags/%s", apiBase, owner, repo, url.PathEscape(tag))
 	return getRelease(url)
 }
 
@@ -132,5 +133,5 @@ func SourceTarballURL(owner, repo, ref string) string {
 	if ref == "" {
 		return fmt.Sprintf("%s/repos/%s/%s/tarball", apiBase, owner, repo)
 	}
-	return fmt.Sprintf("%s/repos/%s/%s/tarball/%s", apiBase, owner, repo, ref)
+	return fmt.Sprintf("%s/repos/%s/%s/tarball/%s", apiBase, owner, repo, url.PathEscape(ref))
 }

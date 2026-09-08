@@ -9,12 +9,13 @@ import (
 	"strings"
 )
 
-// Repo identifies a GitHub repository and, optionally, the ref (tag/branch)
-// the user wants installed.
+// Repo identifies a GitHub repository and, optionally, the ref (tag) or
+// branch the user wants installed.
 type Repo struct {
-	Owner string
-	Name  string
-	Ref   string // optional, e.g. "v1.2.3"; empty means "latest"
+	Owner  string
+	Name   string
+	Ref    string // optional, e.g. "v1.2.3"; empty means "latest"
+	Branch string // optional, e.g. "main"; empty means no branch install
 }
 
 var slugRe = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
@@ -23,12 +24,13 @@ var slugRe = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 //
 //	owner/repo
 //	owner/repo@v1.2.3
+//	owner/repo#main
 //	github.com/owner/repo
 //	https://github.com/owner/repo
 //	https://github.com/owner/repo.git
 //	git@github.com:owner/repo.git
 //
-// and returns the parsed owner/repo/ref.
+// and returns the parsed owner/repo/ref/branch.
 func Parse(remote string) (Repo, error) {
 	s := strings.TrimSpace(remote)
 	if s == "" {
@@ -46,6 +48,12 @@ func Parse(remote string) (Repo, error) {
 		s = strings.Replace(s, ":", "/", 1)
 	}
 
+	var branch string
+	if idx := strings.LastIndex(s, "#"); idx > 0 {
+		branch = s[idx+1:]
+		s = s[:idx]
+	}
+
 	s = strings.TrimPrefix(s, "https://")
 	s = strings.TrimPrefix(s, "http://")
 	s = strings.TrimPrefix(s, "github.com/")
@@ -61,10 +69,15 @@ func Parse(remote string) (Repo, error) {
 		return Repo{}, fmt.Errorf("invalid owner/repo in %q", remote)
 	}
 
-	return Repo{Owner: owner, Name: name, Ref: ref}, nil
+	return Repo{Owner: owner, Name: name, Ref: ref, Branch: branch}, nil
 }
 
-// String renders the repo back as "owner/repo".
+// String renders the repo back as "owner/repo", including the branch
+// suffix when one is set.
 func (r Repo) String() string {
-	return r.Owner + "/" + r.Name
+	s := r.Owner + "/" + r.Name
+	if r.Branch != "" {
+		s += "#" + r.Branch
+	}
+	return s
 }

@@ -16,6 +16,7 @@ type Entry struct {
 	Name        string    `json:"name"`
 	Repo        string    `json:"repo"`
 	Ref         string    `json:"ref,omitempty"`
+	Branch      string    `json:"branch,omitempty"`
 	Method      string    `json:"method"` // "release" or "source"
 	Path        string    `json:"path"`
 	SHA256      string    `json:"sha256,omitempty"`
